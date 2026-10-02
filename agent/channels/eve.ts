@@ -1,5 +1,11 @@
 import { eveChannel } from "eve/channels/eve";
-import { localDev, type AuthFn, vercelOidc } from "eve/channels/auth";
+import {
+  localDev,
+  type AuthFn,
+  vercelOidc,
+  extractBearerToken,
+  withAuthChallenges,
+} from "eve/channels/auth";
 import { auth } from "@/lib/auth";
 
 const betterAuthSession: AuthFn<Request> = async (request) => {
@@ -22,6 +28,25 @@ const betterAuthSession: AuthFn<Request> = async (request) => {
   };
 };
 
+const apiKeyAuth: AuthFn<Request> = withAuthChallenges(
+  (request) => {
+    const expectedKey = process.env.BOT_API_KEY;
+    if (!expectedKey) return null;
+
+    const token = extractBearerToken(request.headers.get("authorization"));
+    if (token && token === expectedKey) {
+      return {
+        attributes: {},
+        authenticator: "api-key",
+        principalId: "discord-bot",
+        principalType: "service",
+      };
+    }
+    return null;
+  },
+  [{ scheme: "Bearer" }]
+);
+
 export default eveChannel({
-  auth: [betterAuthSession, vercelOidc(), localDev()],
+  auth: [betterAuthSession, apiKeyAuth, vercelOidc(), localDev()],
 });
